@@ -525,7 +525,6 @@ def main() -> None:
         entry_points=[CommandHandler("trade", Trade_Command), CommandHandler("calculate", Calculation_Command)],
         states={
             TRADE: PlaceTrade
-            CALCULATE: [MessageHandler(Filters.text & ~Filters.command, CalculateTrade)],
             DECISION: PlaceTrade
         },
         fallbacks=[CommandHandler("cancel", cancel)],
