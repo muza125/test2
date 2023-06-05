@@ -524,9 +524,9 @@ def main() -> None:
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("trade", Trade_Command), CommandHandler("calculate", Calculation_Command)],
         states={
-            TRADE: [MessageHandler(Filters.text & ~Filters.command, PlaceTrade)],
-            CALCULATE: [MessageHandler(Filters.text & ~Filters.command, CalculateTrade)],
-            DECISION: [CommandHandler("yes", PlaceTrade), CommandHandler("no", cancel)]
+            TRADE: PlaceTrade
+            CALCULATE: CalculateTrade
+            DECISION: PlaceTrade
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
