@@ -512,36 +512,19 @@ def main() -> None:
 
     updater = Updater(TOKEN, use_context=True)
 
-    # get the dispatcher to register handlers
-    dp = updater.dispatcher
-
-    # message handler
-    dp.add_handler(CommandHandler("start", welcome))
-
-    # help command handler
-    dp.add_handler(CommandHandler("help", help))
+    # listens for incoming updates from Telegram
+    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN, webhook_url=APP_URL + TOKEN)
+    updater.idle()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("trade", Trade_Command), CommandHandler("calculate", Calculation_Command)],
         states={
-            TRADE: PlaceTrade
+            TRADE: [MessageHandler(Filters.text & ~Filters.command, PlaceTrade)],
+            CALCULATE: [MessageHandler(Filters.text & ~Filters.command, CalculateTrade)],
             DECISION: PlaceTrade
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
-
-    # conversation handler for entering trade or calculating trade information
-    dp.add_handler(conv_handler)
-
-    # message handler for all messages that are not included in conversation handler
-    dp.add_handler(MessageHandler(Filters.text, unknown_command))
-
-    # log all errors
-    dp.add_error_handler(error)
-    
-    # listens for incoming updates from Telegram
-    updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN, webhook_url=APP_URL + TOKEN)
-    updater.idle()
 
     return
 
