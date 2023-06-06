@@ -109,94 +109,8 @@ def ParseSignal(signal: str) -> dict:
 
     return trade
 
-def GetTradeInformation(update: Update, trade: dict, balance: float) -> None:
-    """Calculates information from given trade including stop loss and take profit in pips, posiition size, and potential loss/profit.
 
-    Arguments:
-        update: update from Telegram
-        trade: dictionary that stores trade information
-        balance: current balance of the MetaTrader account
-    """
 
-    # calculates the stop loss in pips
-    if(trade['Symbol'] == 'XAUUSD'):
-        multiplier = 0.1
-
-    elif(trade['Symbol'] == 'XAGUSD'):
-        multiplier = 0.001
-
-    elif(str(trade['Entry']).index('.') >= 2):
-        multiplier = 0.01
-
-    else:
-        multiplier = 0.0001
-
-    # calculates the stop loss in pips
-    stopLossPips = abs(round((trade['StopLoss'] - trade['Entry']) / multiplier))
-
-    # calculates the position size using stop loss and RISK FACTOR
-    trade['PositionSize'] = math.floor(((balance * trade['RiskFactor']) / stopLossPips) / 10 * 100) / 100
-
-    # calculates the take profit(s) in pips
-    takeProfitPips = []
-    for takeProfit in trade['TP']:
-        takeProfitPips.append(abs(round((takeProfit - trade['Entry']) / multiplier)))
-
-    # creates table with trade information
-    table = CreateTable(trade, balance, stopLossPips, takeProfitPips)
-    
-    # sends user trade information and calcualted risk
-    update.effective_message.reply_text(f'<pre>{table}</pre>', parse_mode=ParseMode.HTML)
-
-    return
-
-def CreateTable(trade: dict, balance: float, stopLossPips: int, takeProfitPips: int) -> PrettyTable:
-    """Creates PrettyTable object to display trade information to user.
-
-    Arguments:
-        trade: dictionary that stores trade information
-        balance: current balance of the MetaTrader account
-        stopLossPips: the difference in pips from stop loss price to entry price
-
-    Returns:
-        a Pretty Table object that contains trade information
-    """
-
-    # creates prettytable object
-    table = PrettyTable()
-    
-    table.title = "Trade Information"
-    table.field_names = ["Key", "Value"]
-    table.align["Key"] = "l"  
-    table.align["Value"] = "l" 
-
-    table.add_row([trade["OrderType"] , trade["Symbol"]])
-    table.add_row(['Entry\n', trade['Entry']])
-
-    table.add_row(['Stop Loss', '{} pips'.format(stopLossPips)])
-
-    for count, takeProfit in enumerate(takeProfitPips):
-        table.add_row([f'TP {count + 1}', f'{takeProfit} pips'])
-
-    table.add_row(['\nRisk Factor', '\n{:,.0f} %'.format(trade['RiskFactor'] * 100)])
-    table.add_row(['Position Size', trade['PositionSize']])
-    
-    table.add_row(['\nCurrent Balance', '\n$ {:,.2f}'.format(balance)])
-    table.add_row(['Potential Loss', '$ {:,.2f}'.format(round((trade['PositionSize'] * 10) * stopLossPips, 2))])
-
-    # total potential profit from trade
-    totalProfit = 0
-
-    for count, takeProfit in enumerate(takeProfitPips):
-        profit = round((trade['PositionSize'] * 10 * (1 / len(takeProfitPips))) * takeProfit, 2)
-        table.add_row([f'TP {count + 1} Profit', '$ {:,.2f}'.format(profit)])
-        
-        # sums potential profit from each take profit target
-        totalProfit += profit
-
-    table.add_row(['\nTotal Profit', '\n$ {:,.2f}'.format(totalProfit)])
-
-    return table
 
 async def ConnectMetaTrader(update: Update, trade: dict, enterTrade: bool):
     """Attempts connection to MetaAPI and MetaTrader to place trade.
@@ -254,7 +168,6 @@ async def ConnectMetaTrader(update: Update, trade: dict, enterTrade: bool):
         GetTradeInformation(update, trade, account_information['balance'])
             
         # checks if the user has indicated to enter trade
-        if(enterTrade == True):
 
             # enters trade on to MetaTrader account
             update.effective_message.reply_text("Entering trade on MetaTrader Account ... 👨🏾‍💻")
@@ -512,16 +425,34 @@ def main() -> None:
 
     updater = Updater(TOKEN, use_context=True)
 
+    # get the dispatcher to register handlers
+    dp = updater.dispatcher
+
+    # message handler
+    dp.add_handler(CommandHandler("start", welcome))
+
+    # help command handler
+    dp.add_handler(CommandHandler("help", help))
+
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("trade", Trade_Command), CommandHandler("calculate", Calculation_Command)],
         states={
-            TRADE: PlaceTrade
-            CALCULATE: CalculateTrade
-            DECISION: PlaceTrade
+            TRADE: [MessageHandler(Filters.text & ~Filters.command, PlaceTrade)],
+            CALCULATE: [MessageHandler(Filters.text & ~Filters.command, CalculateTrade)],
+            DECISION: [CommandHandler("yes", PlaceTrade), CommandHandler("no", cancel)]
         },
         fallbacks=[CommandHandler("cancel", cancel)],
     )
 
+    # conversation handler for entering trade or calculating trade information
+    dp.add_handler(conv_handler)
+
+    # message handler for all messages that are not included in conversation handler
+    dp.add_handler(MessageHandler(Filters.text, unknown_command))
+
+    # log all errors
+    dp.add_error_handler(error)
+    
     # listens for incoming updates from Telegram
     updater.start_webhook(listen="0.0.0.0", port=PORT, url_path=TOKEN, webhook_url=APP_URL + TOKEN)
     updater.idle()
